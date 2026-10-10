@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const multer = require('multer');
+const path = require('path');
 
 dotenv.config();
 
@@ -22,6 +23,12 @@ const upload = multer({
 
 app.use(cors());
 app.use(express.json());
+
+// Absolute path to frontend build artifacts
+const clientDistPath = path.resolve(__dirname, '../client/dist');
+
+// Serve static frontend assets from client/dist
+app.use(express.static(clientDistPath));
 
 // Initialize Google Gemini if key is provided
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -279,6 +286,32 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     geminiConfigured: Boolean(GEMINI_API_KEY),
     supabaseConfigured: Boolean(process.env.SUPABASE_URL),
+  });
+});
+
+/* ----------------------------------------------------
+   6. FRONTEND SERVING & REACT ROUTER SPA FALLBACK
+---------------------------------------------------- */
+// Unmatched /api/* routes return 404 JSON instead of HTML
+app.all('/api/{*splat}', (req, res) => {
+  res.status(404).json({ error: 'API endpoint not found' });
+});
+
+// Explicit route for homepage
+app.get('/', (req, res) => {
+  res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).send('Frontend build not found. Please run "npm run build --prefix client" first.');
+    }
+  });
+});
+
+// React Router catch-all route (Express 5 path-to-regexp v8 syntax)
+app.get('{*splat}', (req, res) => {
+  res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).send('Frontend build not found. Please run "npm run build --prefix client" first.');
+    }
   });
 });
 
