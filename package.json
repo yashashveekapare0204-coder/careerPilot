@@ -1,0 +1,14 @@
+{
+  "name": "careerpilot",
+  "version": "1.0.0",
+  "description": "CareerPilot AI — AI-powered campus placement preparation platform",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix client\" \"node server/index.js\"",
+    "dev:client": "npm run dev --prefix client",
+    "dev:server": "node server/index.js",
+    "build": "npm run build --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5"
+  }
+}

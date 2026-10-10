@@ -1,0 +1,27 @@
+# Dependencies
+node_modules
+client/node_modules
+server/node_modules
+
+# Build artifacts
+client/dist
+dist
+
+# Environment variables
+.env
+client/.env
+server/.env
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.DS_Store
