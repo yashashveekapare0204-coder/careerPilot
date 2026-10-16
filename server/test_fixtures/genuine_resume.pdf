@@ -1,0 +1,41 @@
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj
+4 0 obj
+<< /Length 1804 >>
+stream
+BT /F1 11 Tf 50 750 Td (Aarav Sharma | aarav.sharma@example.com | +91 9876543210 | Pune, India) Tj ET
+BT /F1 11 Tf 50 734 Td (GitHub: github.com/aaravsharma | LinkedIn: linkedin.com/in/aaravsharma | LeetCode: leetcode.com/aarav) Tj ET
+BT /F1 11 Tf 50 718 Td (EDUCATION) Tj ET
+BT /F1 11 Tf 50 702 Td (B.Tech in Computer Science and Engineering, National Institute of Technology \(2022 - 2026\), CGPA: 8.7/10) Tj ET
+BT /F1 11 Tf 50 686 Td (Higher Secondary School Certificate \(Class XII\), CBSE, 92.4%) Tj ET
+BT /F1 11 Tf 50 670 Td (TECHNICAL SKILLS) Tj ET
+BT /F1 11 Tf 50 654 Td (Programming Languages: C++, Python, JavaScript, TypeScript, SQL) Tj ET
+BT /F1 11 Tf 50 638 Td (Frameworks & Libraries: React.js, Node.js, Express.js, Tailwind CSS) Tj ET
+BT /F1 11 Tf 50 622 Td (Databases & Developer Tools: PostgreSQL, MongoDB, Git, GitHub, Docker, Postman) Tj ET
+BT /F1 11 Tf 50 606 Td (Core Computer Science: Data Structures & Algorithms, OOP, DBMS, Operating Systems) Tj ET
+BT /F1 11 Tf 50 590 Td (PROJECTS) Tj ET
+BT /F1 11 Tf 50 574 Td (1. Campus Placement Preparation Portal \(React.js, Node.js, PostgreSQL\):) Tj ET
+BT /F1 11 Tf 50 558 Td (Developed a full-stack platform supporting student mock interviews and resume reviews.) Tj ET
+BT /F1 11 Tf 50 542 Td (Integrated authentication and optimized query performance by 35% through database indexing.) Tj ET
+BT /F1 11 Tf 50 526 Td (2. Distributed Task Scheduler \(Python, Redis\):) Tj ET
+BT /F1 11 Tf 50 510 Td (Architected an asynchronous worker queue capable of executing 1,000 jobs per minute.) Tj ET
+BT /F1 11 Tf 50 494 Td (CERTIFICATIONS & ACHIEVEMENTS) Tj ET
+BT /F1 11 Tf 50 478 Td (Solved 350+ algorithmic coding questions across LeetCode and HackerRank.) Tj ET
+BT /F1 11 Tf 50 462 Td (First Place Winner, Inter-College Web Hackathon 2024.) Tj ET
+endstream
+endobj
+5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000266 00000 n 
+0000000450 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+550
+%%EOF

@@ -24,6 +24,7 @@ export default function ResumeCorrectorPage() {
   const [fileDetails, setFileDetails] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const [validationError, setValidationError] = useState('');
+  const [rejection, setRejection] = useState(null);
 
   // Genuine loading state with sequential status messages
   const [analyzing, setAnalyzing] = useState(false);
@@ -34,15 +35,25 @@ export default function ResumeCorrectorPage() {
 
   const handleFile = (file) => {
     setValidationError('');
+    setRejection(null);
     if (!file) return;
 
-    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
-      setValidationError('Please upload a valid PDF file. Other file formats are not accepted.');
+    const lowerName = file.name.toLowerCase();
+    const isAllowed =
+      lowerName.endsWith('.pdf') ||
+      lowerName.endsWith('.doc') ||
+      lowerName.endsWith('.docx') ||
+      file.type === 'application/pdf' ||
+      file.type === 'application/msword' ||
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+    if (!isAllowed) {
+      setValidationError('Please upload a valid PDF, DOC, or DOCX file. Other file formats are not accepted.');
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      setValidationError('File size exceeds the 5MB limit. Please upload a smaller PDF.');
+      setValidationError('File size exceeds the 5MB limit. Please upload a smaller file.');
       return;
     }
 
@@ -65,6 +76,7 @@ export default function ResumeCorrectorPage() {
     setSelectedFile(null);
     setFileDetails(null);
     setValidationError('');
+    setRejection(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -73,10 +85,12 @@ export default function ResumeCorrectorPage() {
 
     setAnalyzing(true);
     setValidationError('');
+    setRejection(null);
+    setAnalysisResult(null);
 
     const messages = [
-      'Reading your resume...',
-      'Identifying skills and projects...',
+      'Extracting document content...',
+      'Verifying document structure & type...',
       'Evaluating resume content and formatting...',
       'Preparing suggestions and ATS score...',
     ];
@@ -99,59 +113,57 @@ export default function ResumeCorrectorPage() {
       });
 
       let data;
-      if (response.ok) {
+      try {
         data = await response.json();
-      } else {
-        // Fallback generator for realistic resume audit if backend key is missing
-        data = generateClientResumeAnalysis(fileDetails.name);
+      } catch {
+        data = { status: 'error', score: null, message: 'Invalid response from server.' };
       }
 
       clearInterval(interval);
-      setAnalysisResult(data);
-      saveResumeAnalysis({ ...data, fileName: fileDetails.name });
+
+      // 1. Non-resume rejection state: Display rejection message and NO score
+      if (data.status === 'not_resume' || data.score === null) {
+        setRejection({
+          title: 'Document Validation Rejected',
+          type: data.documentType || 'Non-Resume Document',
+          message: data.message || 'This document does not appear to be a resume. Please upload your resume or CV.',
+        });
+        setAnalysisResult(null);
+        return;
+      }
+
+      // 2. Unreadable or extraction failure
+      if (data.status === 'unreadable' || (!response.ok && data.status === 'unreadable')) {
+        setValidationError(data.message || 'The uploaded file is empty, corrupted, or unreadable.');
+        setAnalysisResult(null);
+        return;
+      }
+
+      // 3. AI / API failure
+      if (data.status === 'error' || !response.ok) {
+        setValidationError(data.message || 'AI analysis service encountered an error. Please try again.');
+        setAnalysisResult(null);
+        return;
+      }
+
+      // 4. Valid resume with genuine calculated score
+      if (typeof data.score === 'number' && data.score >= 0) {
+        setAnalysisResult(data);
+        saveResumeAnalysis({ ...data, fileName: fileDetails.name });
+      } else {
+        setValidationError('Invalid response received from analysis engine. No score generated.');
+        setAnalysisResult(null);
+      }
     } catch (err) {
-      console.warn('Backend API request error, utilizing client evaluation:', err);
-      // Fallback robust audit so user workflow is never blocked
-      const fallback = generateClientResumeAnalysis(fileDetails.name);
-      setAnalysisResult(fallback);
-      saveResumeAnalysis({ ...fallback, fileName: fileDetails.name });
+      clearInterval(interval);
+      console.error('Backend API request error:', err);
+      setValidationError('Failed to connect to the resume analyzer server. Please try again.');
+      setAnalysisResult(null);
     } finally {
       clearInterval(interval);
       setAnalyzing(false);
     }
   };
-
-  // Client-side deterministic evaluation fallback
-  const generateClientResumeAnalysis = (fileName) => ({
-    score: 84,
-    fileName,
-    detectedSkills: ['Data Structures & Algorithms', 'C++', 'Java', 'React.js', 'Node.js', 'PostgreSQL', 'Git', 'REST APIs'],
-    educationSummary: 'B.Tech in Computer Science & Engineering (2022 - 2026), CGPA: 8.6/10.0',
-    projectSummary: 'Identified 2 core projects: Full-Stack Web Portal and Distributed Task Scheduler with real-world implementation.',
-    strengths: [
-      'Strong technical skill diversity across both backend and frontend development.',
-      'Clear project architecture with explicit tech stack listings.',
-      'Included verifiable GitHub repository and live deployment hyperlinks.',
-    ],
-    missingDetails: [
-      'Lack of quantified metric results (e.g., "improved query performance by 35%").',
-      'Missing course achievements or competitive programming rating links (Codeforces/LeetCode).',
-      'Certifications section lacks date of issue and credential IDs.',
-    ],
-    formattingIssues: [
-      'Inconsistent bullet indentation between Work Experience and Projects.',
-      'Use of multiple font sizes in subsection headings.',
-    ],
-    improvementSuggestions: [
-      'Begin each project bullet point with a strong action verb (Architected, Optimized, Implemented).',
-      'Include quantifiable business or performance impact for each major bullet.',
-      'Group technical competencies into Languages, Frameworks, and Tools for rapid ATS parsing.',
-    ],
-    targetRoleRecommendations: [
-      'Add System Design and Microservices concepts for SDE-1 interviews.',
-      'Highlight experience with Docker and CI/CD pipelines to stand out in technical screenings.',
-    ],
-  });
 
   return (
     <div style={{ maxWidth: '960px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -182,9 +194,39 @@ export default function ResumeCorrectorPage() {
               Upload Your Resume
             </h2>
             <p style={{ fontSize: '0.9rem' }}>
-              Upload your resume in PDF format to receive personalized feedback.
+              Upload your resume in PDF, DOC, or DOCX format to receive personalized feedback.
             </p>
           </div>
+
+          {/* Document Validation Rejection Message (Mandatory Non-Resume Alert) */}
+          {rejection && (
+            <div
+              style={{
+                padding: '1.25rem 1.5rem',
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                border: '1.5px solid #ef4444',
+                borderRadius: 'var(--radius-md)',
+                marginBottom: '1.5rem',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.45rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ef4444', fontWeight: 700, fontSize: '0.95rem' }}>
+                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                <span>{rejection.title}</span>
+              </div>
+              <p style={{ fontSize: '0.875rem', margin: 0, color: 'var(--foreground)', lineHeight: 1.5 }}>
+                {rejection.message}
+              </p>
+              {rejection.type && (
+                <div style={{ fontSize: '0.785rem', color: 'var(--muted-foreground)', marginTop: '0.25rem' }}>
+                  Identified Document: <strong>{rejection.type}</strong> — Scoring halted. No score will be calculated for non-resumes.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Validation Error Message */}
           {validationError && (
@@ -251,12 +293,12 @@ export default function ResumeCorrectorPage() {
                   Browse Files
                 </button>
                 <p style={{ fontSize: '0.85rem', color: 'var(--muted-foreground)' }}>
-                  or drag and drop your resume PDF here
+                  or drag and drop your resume file here
                 </p>
               </div>
 
               <div style={{ fontSize: '0.775rem', color: 'var(--muted-foreground)', marginTop: '0.5rem' }}>
-                Supported format: <strong>PDF</strong> only (Maximum size: 5MB)
+                Supported formats: <strong>PDF, DOC, DOCX</strong> (Maximum size: 5MB)
               </div>
             </div>
           ) : (
@@ -326,7 +368,7 @@ export default function ResumeCorrectorPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,application/pdf"
+            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             onChange={(e) => e.target.files && handleFile(e.target.files[0])}
             style={{ display: 'none' }}
           />

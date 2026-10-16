@@ -9,14 +9,26 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Setup Multer memory storage for PDF resume parsing
+const { extractDocumentText, validateResumeDocument, analyzeResumeContent } = require('./documentValidator');
+
+// Setup Multer memory storage for PDF, DOC, and DOCX resume parsing
 const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const mime = (file.mimetype || '').toLowerCase();
+    const allowedExts = ['.pdf', '.doc', '.docx'];
+    const allowedMimes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/octet-stream', // Some browsers send octet-stream for docx
+    ];
+
+    if (allowedExts.includes(ext) || allowedMimes.includes(mime)) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF files are supported.'));
+      cb(new Error('Unsupported file format. Please upload a PDF, DOC, or DOCX document.'));
     }
   },
 });
@@ -60,17 +72,65 @@ function cleanJson(str) {
 }
 
 /* ----------------------------------------------------
-   1. RESUME ANALYZER
+   1. RESUME ANALYZER (With Mandatory Document Validation)
 ---------------------------------------------------- */
 app.post('/api/resume/analyze', upload.single('resume'), async (req, res) => {
   try {
-    const fileName = req.file?.originalname || 'Student_Resume.pdf';
+    // 1. Verify file presence
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({
+        status: 'unreadable',
+        score: null,
+        message: 'No resume file uploaded. Please upload a PDF, DOC, or DOCX file.',
+      });
+    }
 
-    // If Gemini client is active, attempt AI analysis
+    const fileName = req.file.originalname || 'Resume.pdf';
+
+    // 2. Extract actual text from supported document formats
+    let extraction;
+    try {
+      extraction = await extractDocumentText(req.file.buffer, req.file.originalname, req.file.mimetype);
+    } catch (extractErr) {
+      return res.status(400).json({
+        status: 'unreadable',
+        score: null,
+        message: extractErr.message || 'The uploaded file is empty, corrupted, or unreadable. Please upload a clear document.',
+      });
+    }
+
+    // 3. MANDATORY DOCUMENT VALIDATION BEFORE SCORING
+    // Strictly verify if the document is actually a resume/CV based on content and structure
+    const validation = validateResumeDocument(extraction.text, fileName);
+    if (!validation.isValid) {
+      // Reject non-resume documents immediately without calling any resume scoring function
+      return res.status(422).json({
+        status: 'not_resume',
+        score: null,
+        documentType: validation.detectedType,
+        message: validation.message || 'This document does not appear to be a resume. Please upload your resume or CV.',
+      });
+    }
+
+    // 4. Test hook for simulating AI/API failure during test execution
+    if (req.headers['x-simulate-ai-failure'] === 'true') {
+      return res.status(502).json({
+        status: 'error',
+        score: null,
+        message: 'AI analysis service failed: Simulated AI/API failure.',
+      });
+    }
+
+    // 5. RESUME SCORING (Only executes AFTER document has passed validation)
     if (genAI) {
       try {
-        const prompt = `You are a Senior Campus Placement Technical Recruiter. Analyze this college student's resume (file: ${fileName}).
-Evaluate ATS compliance, technical depth, formatting, and project impact.
+        const prompt = `You are a Senior Campus Placement Technical Recruiter. Analyze this college student's resume text:
+
+--- RESUME TEXT START ---
+${extraction.text.slice(0, 30000)}
+--- RESUME TEXT END ---
+
+Evaluate ATS compliance, technical depth, formatting, and project impact strictly based on the extracted resume text above.
 Output strict JSON format with keys:
 {
   "score": number (0-100),
@@ -89,60 +149,49 @@ Output strict JSON format with keys:
         });
 
         const parsed = cleanJson(response.text);
-        if (parsed && typeof parsed.score === 'number') {
-          return res.json({ ...parsed, fileName });
+        if (parsed && typeof parsed.score === 'number' && parsed.score >= 0 && parsed.score <= 100) {
+          return res.json({
+            status: 'success',
+            score: Math.round(parsed.score),
+            fileName,
+            detectedSkills: Array.isArray(parsed.detectedSkills) ? parsed.detectedSkills : [],
+            educationSummary: parsed.educationSummary || 'Parsed from resume.',
+            projectSummary: parsed.projectSummary || 'Parsed from resume.',
+            strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
+            missingDetails: Array.isArray(parsed.missingDetails) ? parsed.missingDetails : [],
+            formattingIssues: Array.isArray(parsed.formattingIssues) ? parsed.formattingIssues : [],
+            improvementSuggestions: Array.isArray(parsed.improvementSuggestions) ? parsed.improvementSuggestions : [],
+            targetRoleRecommendations: Array.isArray(parsed.targetRoleRecommendations) ? parsed.targetRoleRecommendations : [],
+          });
+        } else {
+          // Invalid AI response: Reject the response instead of displaying a fabricated score
+          return res.status(502).json({
+            status: 'error',
+            score: null,
+            message: 'The AI model returned an invalid or unparseable analysis. Please try again.',
+          });
         }
       } catch (err) {
-        console.warn('[Resume Analyzer] Gemini API call notice, falling back to heuristic engine:', err.message);
+        console.error('[Resume Analyzer] Gemini API call failed:', err.message);
+        // Never fall back to fake or hardcoded scores upon AI/API failure
+        return res.status(502).json({
+          status: 'error',
+          score: null,
+          message: `AI analysis service failed: ${err.message}`,
+        });
       }
     }
 
-    // Heuristic analysis engine
-    const analysis = {
-      score: 84,
-      fileName,
-      detectedSkills: [
-        'Data Structures & Algorithms',
-        'C++',
-        'Java',
-        'React.js',
-        'Node.js',
-        'PostgreSQL',
-        'Git',
-        'REST APIs',
-        'Problem Solving',
-      ],
-      educationSummary: 'B.Tech in Computer Science & Engineering, Batch 2026 (CGPA: 8.6/10.0)',
-      projectSummary: 'Identified 2 core engineering projects: Full-Stack Web Portal and Distributed Task Scheduler with active repository links.',
-      strengths: [
-        'Strong technical breadth across frontend and backend systems.',
-        'Clean single-column structure parsed easily by ATS algorithms.',
-        'Included verifiable GitHub repository and deployment hyperlinks.',
-      ],
-      missingDetails: [
-        'Quantified performance metrics are missing on project bullets (e.g., "reduced latency by 25%").',
-        'No direct link to competitive coding profiles (LeetCode or Codeforces rating).',
-        'Coursework section lacks specialized electives like Distributed Systems or Cloud Computing.',
-      ],
-      formattingIssues: [
-        'Slight variation in bullet margin indentation under Projects section.',
-        'Ensure consistent date format (e.g., "Aug 2024 - Dec 2024").',
-      ],
-      improvementSuggestions: [
-        'Use the Google XYZ resume formula: "Accomplished [X], as measured by [Y], by doing [Z]".',
-        'Group technical competencies into Languages, Frameworks, and Developer Tools.',
-        'Add a short 1-line impact statement summarizing the scale or users of your web application.',
-      ],
-      targetRoleRecommendations: [
-        'Review System Design basics (Load Balancing, Caching) for SDE-1 rounds.',
-        'Highlight containerization experience with Docker to stand out in screening.',
-      ],
-    };
-
-    res.json(analysis);
+    // 6. Authentic content-based analysis engine (analyzes the real extracted text, never hardcoded fake scores)
+    const analysis = analyzeResumeContent(extraction.text, fileName);
+    return res.json(analysis);
   } catch (err) {
     console.error('Error analyzing resume:', err);
-    res.status(500).json({ error: 'Failed to process resume analysis.' });
+    return res.status(500).json({
+      status: 'error',
+      score: null,
+      message: 'Failed to process resume analysis: ' + (err.message || 'Unknown server error'),
+    });
   }
 });
 

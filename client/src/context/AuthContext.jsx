@@ -370,7 +370,7 @@ export function AuthProvider({ children }) {
 
   // Save Resume Analysis
   const saveResumeAnalysis = (analysis) => {
-    if (!user) return;
+    if (!user || !analysis || typeof analysis.score !== 'number' || analysis.status === 'not_resume') return;
     const updatedSkills = { ...studentData.skillsAssessment };
     if (analysis.detectedSkills?.length) {
       if (!updatedSkills.dsa) updatedSkills.dsa = 70;
